@@ -1,0 +1,94 @@
+//存放 C中代码
+    /**
+     * receive
+     */
+    CString strMd5="";
+    CString strName="";
+    CString strSize="";
+
+    int pos1=strReceive.Find('$');
+    int pos2=strReceive.ReverseFind('$');
+
+    if (pos1 == -1 || pos2 == -1 || pos2==pos1)    {
+        serverSocket.Close();
+        continue;
+    }
+
+    strMd5=strReceive.Left(pos1);
+    strSize=strReceive.Mid(pos2+1);
+    sscanf(strReceive,"%*[^$]$%[^$]",strName);
+
+      if (!pThis->QueryMD5(strMd5))
+    {
+        CString name="";
+        name.Format("正在准备接收文件：%s",strName);
+        pThis->SetDlgItemText(IDC_STATICCHUANSHU,name);
+        pThis->SetDlgItemText(IDC_STATICFILESAVEDIR,"文件准备存入目录"+pThis->m_strDirectory);
+        pThis->m_progressCtrl.SetPos(1);
+
+        serverSocket.Send("YES", 4);     //发送Yes，同意发送文件
+
+        CFile file;                           //接收文件
+        CString SavePath="";
+        SavePath.Format("%s%s",pThis->m_strDirectory,strName);
+        file.Open(SavePath,CFile::modeCreate | CFile::modeNoTruncate | CFile::modeWrite);
+
+        UINT nSize = 0;
+        UINT nData = 0;
+        UINT uFileSize=0;
+
+        char *szBuff=NULL;
+        uFileSize=(ULONGLONG)atoi(strSize);
+
+        name.Format("正在接收文件：%s",strName);
+        pThis->SetDlgItemText(IDC_STATICCHUANSHU,name);
+        pThis->SetDlgItemText(IDC_STATICFILESAVEDIR,"文件正在存入目录"+pThis->m_strDirectory);
+        pThis->m_progressCtrl.SetPos(10);
+
+        while(nSize<uFileSize)
+        {
+            szBuff = new char[1024];
+            memset(szBuff,0x00,1024);
+            nData=serverSocket.Receive(szBuff,1024);
+            // file.Write("1234",4);
+            file.Write(szBuff,nData);
+            nSize+=nData;
+            pThis->m_progressCtrl.SetPos((int)(nSize/uFileSize*100));
+            // pThis->m_progressCtrl.UpdateWindow();
+            delete []szBuff;
+            if(nSize==0)
+            {
+                break;
+            }
+        }
+
+
+        /**
+         * Send
+         */
+
+        lFileSize= finder.GetLength();
+        CString strFileSize="";
+        strFileSize.Format("%d",lFileSize);
+
+        m_Socket1.Send(strMD5+"$"+strFileName+"$"+strFileSize
+        ,strMD5.GetLength()+strFileName.GetLength()+strFileSize.GetLength()+2);
+
+        char cRecValue1[10] = {0};
+        m_Socket1.Receive((void *)cRecValue1, 10);
+        CString strRecValue1="";
+        strRecValue1.Format("%s",cRecValue1);
+
+        if (strRecValue1=="YES") {    //发送文件
+
+            if ( SendLogFile(m_Socket1,strFilePath,lFileSize)){
+
+                int Send(const void* lpBuf, int nBufLen, int nFlags = 0);
+
+
+
+
+
+
+
+

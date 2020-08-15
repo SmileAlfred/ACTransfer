@@ -64,7 +64,6 @@ public class SocketManager {
     private String MD5R = "";
     private String fileNameR = "";
     private boolean isExistR = false;
-    private boolean sureToReceiveFile = false;
 
 
     public SocketManager(Handler handler, Context context) {
@@ -127,6 +126,7 @@ public class SocketManager {
                 String tempPath = path.get(i).replaceAll(regEx, "");
                 File file = new File(tempPath);
                 String MD5 = MD5FileUtils.md5(file);
+
                 String confirmStr = MD5 + "$" + fileName.get(i) + "$" + file.length();
                 Log.i(TAG, "SendFile: While : confirmStr =  " + confirmStr);
 
@@ -155,11 +155,8 @@ public class SocketManager {
 
                 //方法二接收 PC 端发送的结构体，并验证是否接收正确
                 InputStream inputStream = name.getInputStream();
-                PcStruct pcStructR = new PcStruct();
-                byte[] tempBytes4 = new byte[4];
-                byte[] tempBytes8 = new byte[8];
 
-                byte[] bytes = new byte[40];
+                byte[] bytes = new byte[48];
                 inputStream.read(bytes);
                 /**
                  * public static void arraycopy(Object src, int srcPos, Object dest, int destPos, int length)
@@ -169,26 +166,7 @@ public class SocketManager {
                  * 　　int destPos : 目标数组的开始起始位置
                  * 　　int length  : 要copy的数组的长度
                  */
-
-                System.arraycopy(bytes, 0, tempBytes4, 0, 4);
-                pcStructR.setnMsgCode(byteArrayToInt(tempBytes4));
-                System.arraycopy(bytes, 4, tempBytes4, 0, 4);
-                pcStructR.setnDataCnt(byteArrayToInt(tempBytes4));
-
-                System.arraycopy(bytes, 8, tempBytes8, 0, 8);
-                double mPdDataX0 = byteArrayTodouble(tempBytes8);
-                System.arraycopy(bytes, 16, tempBytes8, 0, 8);
-                double mPdDataX1 = byteArrayTodouble(tempBytes8);
-                double[] mPdDataX = new double[]{mPdDataX0, mPdDataX1};
-                pcStructR.setPdDataX(mPdDataX);
-
-                System.arraycopy(bytes, 24, tempBytes8, 0, 8);
-                double mPdDataY0 = byteArrayTodouble(tempBytes8);
-                System.arraycopy(bytes, 32, tempBytes8, 0, 8);
-                double mPdDataY1 = byteArrayTodouble(tempBytes8);
-                double[] mPdDataY = new double[]{mPdDataY0, mPdDataY1};
-                pcStructR.setPdDataY(mPdDataY);
-
+                PcStruct pcStructR = PcStruct.getPcStructInstance(bytes);
                 Log.i(TAG, "SendFile: 接收结构体 =  pcStructR： " + pcStructR.toString());
 
 
@@ -250,6 +228,11 @@ public class SocketManager {
                 String bytesName = new String(bytes, code).trim();
 
                 MD5R = bytesName.substring(0, bytesName.indexOf("$"));
+                isExistMD5(MD5R);
+                if(isExistR){
+                    Log.i(TAG, "ReceiveFile: 文件已存在");
+                    break;
+                }
                 Log.i(TAG, "ReceiveFile  receiveSocket  =  " + "  MD5Lists.size()  = " + MD5Lists.size());
                 //去掉MD5
                 bytesName = bytesName.replaceAll(MD5R, "");
@@ -297,11 +280,10 @@ public class SocketManager {
                 }*/
 
                 //待办事项：向PC端发送结构体；→ 测试 PC 端接收情况
-                Socket pwSocket = new Socket(targetIpAddress, targetPort);
-                OutputStream PCStructOPS = pwSocket.getOutputStream();
-                PCStructOPS.write(new PcStruct(1, 2, 1.1, 1.2, 1.3, 1.4).getBuf());
+                OutputStream PCStructOPS = receiveSocket.getOutputStream();
+                PCStructOPS.write(new PcStruct(2, 3, 4.1, 4.2, 4.3, 4.4).getBuf());
                 PCStructOPS.flush();
-                PCStructOPS = null;
+
 
                 /**
                  * 5. 写入文件；确定接收后，正式接收文件
@@ -312,7 +294,7 @@ public class SocketManager {
                     //接受文件内容
                     Log.i(TAG, "ReceiveFile file Socket data  ==  " + receiveSocket);
                     //3. 获取客户端发送过来的数据
-                    InputStream receiveDataIPS = pwSocket.getInputStream();
+                    InputStream receiveDataIPS = receiveSocket.getInputStream();
 
                     //得到SD卡根目录
                     File sdCardDir = Environment.getExternalStorageDirectory();
@@ -326,7 +308,7 @@ public class SocketManager {
 
                     //装载文件名的数组
                     byte[] buffer = new byte[1024];
-                    int size = 0;
+                    int size = -1;
 
                     //方式二
                     long received = 0L;
@@ -356,7 +338,6 @@ public class SocketManager {
                     //告诉发送端我已经接收完毕
                     SendMessage(0, fileNameR + "接收完成\n" + "保存在：" + savePath);
                     MD5R = "";
-                    sureToReceiveFile = false;
                     break;
                 }
             }
@@ -372,14 +353,19 @@ public class SocketManager {
      * @param md5 待检测的 值
      * @return
      */
-    private boolean isExistMD5(String md5) {
+    private void isExistMD5(String md5) {
         if (MD5Lists.contains(md5)) {
-            return true;
+            isExistR = true;
         } else {
             MD5Lists.add(md5);
-            return false;
+            isExistR = false;
         }
     }
+
+
+
+
+
 
     /**
      * int转为低字节在前，高字节在后的byte数组 VC
@@ -395,7 +381,6 @@ public class SocketManager {
         b[3] = (byte) (n >> 24 & 0xff);
         return b;
     }
-
 
     /**
      * 将String转为byte数组
@@ -426,7 +411,6 @@ public class SocketManager {
         return length;
     }
 
-
     /**
      * 好使！字节数组到int的转换.
      */
@@ -443,7 +427,6 @@ public class SocketManager {
         s = s0 | s1 | s2 | s3;
         return s;
     }
-
 
     /**
      * 好使！字节数组到double的转换.

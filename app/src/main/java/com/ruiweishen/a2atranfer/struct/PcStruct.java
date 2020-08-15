@@ -1,13 +1,5 @@
 package com.ruiweishen.a2atranfer.struct;
 
-import android.util.Log;
-
-import java.io.ByteArrayInputStream;
-import java.io.DataInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Arrays;
-
 /**
  * @author: LiuSaiSai
  * @date: 2020/08/12 16:33
@@ -20,32 +12,16 @@ import java.util.Arrays;
  */
 public class PcStruct {
 
-    public int getnMsgCode() {
-        return nMsgCode;
-    }
-
     public void setnMsgCode(int nMsgCode) {
         this.nMsgCode = nMsgCode;
-    }
-
-    public int getnDataCnt() {
-        return nDataCnt;
     }
 
     public void setnDataCnt(int nDataCnt) {
         this.nDataCnt = nDataCnt;
     }
 
-    public double[] getPdDataX() {
-        return pdDataX;
-    }
-
     public void setPdDataX(double[] pdDataX) {
         this.pdDataX = pdDataX;
-    }
-
-    public double[] getPdDataY() {
-        return pdDataY;
     }
 
     public void setPdDataY(double[] pdDataY) {
@@ -66,9 +42,47 @@ public class PcStruct {
         this.buf = buf;
     }
 
+    /**
+     * 通过接收到的 byte[] 对象解析成结构体对象；
+     * 注意：PC 接收端，发送的结构体还是 48 个字节，并没有修改，此时的顺序时 code，X[2]，Y[2],data,
+     * @param bytes 来自 PC 端的字节流文件；
+     * @return
+     */
+    public static PcStruct getPcStructInstance(byte[] bytes) {
+        PcStruct pcStruct = new PcStruct();
+
+        byte[] tempBytes4 = new byte[8];
+        byte[] tempBytes8 = new byte[8];
+
+        System.arraycopy(bytes, 0, tempBytes4, 0, 8);
+        pcStruct.setnMsgCode(byteArrayToInt(tempBytes4));
+        System.arraycopy(bytes, 40, tempBytes4, 0, 8);
+        pcStruct.setnDataCnt(byteArrayToInt(tempBytes4));
+
+        System.arraycopy(bytes, 8, tempBytes8, 0, 8);
+        double mPdDataX0 = byteArrayToDouble(tempBytes8);
+        System.arraycopy(bytes, 16, tempBytes8, 0, 8);
+        double mPdDataX1 = byteArrayToDouble(tempBytes8);
+        double[] mPdDataX = new double[]{mPdDataX0, mPdDataX1};
+        pcStruct.setPdDataX(mPdDataX);
+
+        System.arraycopy(bytes, 24, tempBytes8, 0, 8);
+        double mPdDataY0 = byteArrayToDouble(tempBytes8);
+        System.arraycopy(bytes, 32, tempBytes8, 0, 8);
+        double mPdDataY1 = byteArrayToDouble(tempBytes8);
+        double[] mPdDataY = new double[]{mPdDataY0, mPdDataY1};
+        pcStruct.setPdDataY(mPdDataY);
+
+        return pcStruct;
+    }
+
     public PcStruct() {
     }
 
+    /**
+     * 这里通过构造器 + getBuf() 的方式，获取输出字节流，向PC端传输结构体；
+     * PC 端已经设置为原始对齐方式，即，字节 无 对齐方式；这里需要注意的是！传递的顺序 应该和PC端定义结构参数的顺序一致
+     */
     //参数字节：4+4 + 8+8+8+8
     public PcStruct(int nMsgCode, int nDataCnt, double pdDataX0, double pdDataX1, double pdDataY0, double pdDataY1) {
         byte[] tempByte4 = new byte[4];
@@ -76,17 +90,20 @@ public class PcStruct {
         buf = new byte[40];
         tempByte4 = toLH(nMsgCode);
         System.arraycopy(tempByte4, 0, buf, 0, 4);
-        tempByte4 = toLH(nDataCnt);
-        System.arraycopy(tempByte4, 0, buf, 4, 4);
+
         tempByte8 = toLH(pdDataX0);
-        System.arraycopy(tempByte8, 0, buf, 8, 8);
+        System.arraycopy(tempByte8, 0, buf, 4, 8);
         tempByte8 = toLH(pdDataX1);
-        System.arraycopy(tempByte8, 0, buf, 16, 8);
+        System.arraycopy(tempByte8, 0, buf, 12, 8);
+
         tempByte8 = toLH(pdDataY0);
-        System.arraycopy(tempByte8, 0, buf, 24, 8);
+        System.arraycopy(tempByte8, 0, buf, 20, 8);
         tempByte8 = toLH(pdDataY1);
-        System.arraycopy(tempByte8, 0, buf, 32, 8);
+        System.arraycopy(tempByte8, 0, buf, 28, 8);
+        tempByte4 = toLH(nDataCnt);
+        System.arraycopy(tempByte4, 0, buf, 36, 4);
     }
+
     /**
      * 返回要发送的数组
      */
@@ -95,23 +112,20 @@ public class PcStruct {
     }
 
 
-
-
     /**
      * double 转 byte[]
      * 小端 高前低后
      *
      * @return
      */
-    public static byte[] toLH (double d) {
+   /* public static byte[] toLH (double d) {
         long value = Double.doubleToRawLongBits(d);
         byte[] byteRet = new byte[8];
         for (int i = 0; i < 8; i++) {
             byteRet[i] = (byte) ((value >> 8 * i) & 0xff);
         }
         return byteRet;
-    }
-
+    }*/
 
 
     /**
@@ -119,15 +133,14 @@ public class PcStruct {
      *
      * @return
      */
-   public static byte[] toLH(int n) {
+   /*public static byte[] toLH(int n) {
         byte[] b = new byte[4];
         b[3] = (byte) (n & 0xff);
         b[2] = (byte) (n >> 8 & 0xff);
         b[1] = (byte) (n >> 16 & 0xff);
         b[0] = (byte) (n >> 24 & 0xff);
         return b;
-    }
-
+    }*/
 
 
     /**
@@ -176,7 +189,6 @@ public class PcStruct {
     }
 
 
-
     @Override
     public String toString() {
         return "PcStruct{" +
@@ -188,7 +200,6 @@ public class PcStruct {
                 ", pdDataY[1]=" + pdDataY[1] +
                 '}';
     }
-
 
 
     //不对
@@ -209,24 +220,66 @@ public class PcStruct {
         }
         return output;
     }*/
+
     /**
-     * 不对 将int转为低字节在前，高字节在后的byte数组
+     * 将int转为低字节在前，高字节在后的byte数组
      */
-   /* private static byte[] toLH(int n) {
+    private static byte[] toLH(int n) {
         byte[] b = new byte[4];
         b[0] = (byte) (n & 0xff);
         b[1] = (byte) (n >> 8 & 0xff);
         b[2] = (byte) (n >> 16 & 0xff);
         b[3] = (byte) (n >> 24 & 0xff);
         return b;
-    }*/
+    }
 
     /**
-     *  不对 double 转 byte[] 小端 低前高后
+     * double 转 byte[] 小端 低前高后
      */
-   /* public static byte[] toLH(double data) {
+    public static byte[] toLH(double data) {
         long intBits = Double.doubleToLongBits(data);
         byte[] bytes = getLongBytes(intBits);
         return bytes;
-    }*/
+    }
+
+    /**
+     * 好使！字节数组到int的转换.
+     */
+    public static int byteArrayToInt(byte[] b) {
+        int s = 0;
+        // 最低位
+        int s0 = b[0] & 0xff;
+        int s1 = b[1] & 0xff;
+        int s2 = b[2] & 0xff;
+        int s3 = b[3] & 0xff;
+        s3 <<= 24;
+        s2 <<= 16;
+        s1 <<= 8;
+        s = s0 | s1 | s2 | s3;
+        return s;
+    }
+
+
+    /**
+     * 好使！字节数组到double的转换.
+     */
+    public static double byteArrayToDouble(byte[] b) {
+        long m;
+        m = b[0];
+        m &= 0xff;
+        m |= ((long) b[1] << 8);
+        m &= 0xffff;
+        m |= ((long) b[2] << 16);
+        m &= 0xffffff;
+        m |= ((long) b[3] << 24);
+        m &= 0xffffffffl;
+        m |= ((long) b[4] << 32);
+        m &= 0xffffffffffl;
+        m |= ((long) b[5] << 40);
+        m &= 0xffffffffffffl;
+        m |= ((long) b[6] << 48);
+        m &= 0xffffffffffffffl;
+        m |= ((long) b[7] << 56);
+        return Double.longBitsToDouble(m);
+    }
 }

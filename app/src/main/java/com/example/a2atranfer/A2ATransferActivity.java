@@ -1,4 +1,4 @@
-package com.ruiweishen.a2atranfer;
+package com.example.a2atranfer;
 
 import android.annotation.TargetApi;
 import android.app.Activity;
@@ -16,8 +16,6 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.FrameLayout;
-import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -26,6 +24,10 @@ import androidx.core.app.ActivityCompat;
 
 import com.nononsenseapps.filepicker.FilePickerActivity;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -41,10 +43,8 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
     private TextView tvMsg, tv_test;
     private EditText txtIP, txtPort, txtEt;
     private Button btnSend;
-    private ListView mLvWifi;
-    private FrameLayout mflWifi;
     private Handler handler;
-    private SocketManager socketManager;
+    private SocketManager4Java socketManager4Java;
 
     private final String[] PERMISSIONS_STORAGE = {
             "android.permission.READ_EXTERNAL_STORAGE",
@@ -55,6 +55,8 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
             "android.permission.CHANGE_NETWORK_STATE"};
 
     private final String TAG = A2ATransferActivity.this.getClass().getSimpleName();
+    private final String SSID = "奥特曼打小怪兽";
+    private final int PASW = 123456789;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,8 +64,9 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
         setContentView(R.layout.activity_a2a_transfer);
         ActivityCompat.requestPermissions(A2ATransferActivity.this, PERMISSIONS_STORAGE, REQUEST_CODE);
         initView();
+        txtPort.setText("9996");
 
-
+        getParam("20", "20");
 
         handler = new Handler() {
             @Override
@@ -84,19 +87,48 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                 }
             }
         };
-        socketManager = new SocketManager(handler, this);
+        if (socketManager4Java == null) socketManager4Java = new SocketManager4Java(handler, this);
     }
 
+    private String regEx = "/root/", maohao = ":", seriesTitle2;
+
+    public void getParam(String theWheelDate, String theWheelTime) {
+        //String name = theWheelDate + "_" + theWheelTime + ".txt";
+        File sdCardDir = Environment.getExternalStorageDirectory();
+        //String chilePath = "/RailMeasurement/ForPC/" + theWheelDate;
+        String chilePath = "/Test/";
+        //File BuildDir = new File(sdCardDir, chilePath);
+        File BuildDir = new File(sdCardDir, chilePath);
+        String name = "deviceid.txt";
+        if (BuildDir.exists() == false) BuildDir.mkdirs();
+        String savePath = BuildDir.getPath() + "/" + name;
+        savePath = savePath.replaceAll(regEx, "");
+        savePath = savePath.replaceAll(maohao, "");
+
+        File saveFile = new File(savePath);
+        InputStreamReader readIPS = null;
+        try {
+            readIPS = new InputStreamReader(new FileInputStream(saveFile), "GBK");
+            BufferedReader bufferedReader = null;
+            if (readIPS != null) {
+                bufferedReader = new BufferedReader(readIPS);
+            }
+            String lineTxt = null;
+            StringBuffer sb = new StringBuffer();
+            while ((lineTxt = bufferedReader.readLine()) != null) {
+                sb.append(lineTxt);
+            }
+            readIPS.close();
+        } catch (Exception e) {
+        }
+    }
 
     private void initView() {
-        tvMsg = (TextView) findViewById(R.id.tvMsg);
-        txtIP = (EditText) findViewById(R.id.txtIP);
-        txtPort = (EditText) findViewById(R.id.txtPort);
-        txtEt = (EditText) findViewById(R.id.et);
+        tvMsg = (TextView) findViewById(R.id.tv_local_ip);
+        txtIP = (EditText) findViewById(R.id.et_ip);
+        txtPort = (EditText) findViewById(R.id.et_port);
+        txtEt = (EditText) findViewById(R.id.tv_msg);
         tv_test = findViewById(R.id.tv_test);
-
-        mLvWifi = findViewById(R.id.lv_wifi);
-        mflWifi = findViewById(R.id.fl_wifi);
 
         btnSend = (Button) findViewById(R.id.btnSend);
         btnSend.setOnClickListener(this);
@@ -110,9 +142,12 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                 i.putExtra(FilePickerActivity.EXTRA_ALLOW_MULTIPLE, true);
                 i.putExtra(FilePickerActivity.EXTRA_ALLOW_CREATE_DIR, false);
                 i.putExtra(FilePickerActivity.EXTRA_MODE, FilePickerActivity.MODE_FILE);
-                i.putExtra(FilePickerActivity.EXTRA_START_PATH, Environment.getExternalStorageDirectory().getPath());
-                Log.i(TAG, "onClick: Environment.getExternalStorageDirectory().getPath()" + Environment.getExternalStorageDirectory().getPath());
 
+                String path = Environment.getExternalStorageDirectory().getAbsolutePath();
+                i.putExtra(FilePickerActivity.EXTRA_START_PATH, path);
+
+                Log.i(TAG, "onClick: Environment.getExternalStorageDirectory().getPath()" +
+                        Environment.getExternalStorageDirectory().getPath());
                 startActivityForResult(i, FILE_CODE);
                 break;
             default:
@@ -145,7 +180,7 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                             @Override
                             public void run() {
                                 Log.i(TAG, "run:fileNames.size() =  " + fileNames.size());
-                                socketManager.SendFile(fileNames, paths, ipAddress, port);
+                                socketManager4Java.SendFile(fileNames, paths);
                             }
                         });
                         sendThread.start();
@@ -159,13 +194,13 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                             Uri uri = Uri.parse(path);
                             paths.add(uri.getPath());
                             fileNames.add(uri.getLastPathSegment());
-                            socketManager.SendFile(fileNames, paths, ipAddress, port);
+                            socketManager4Java.SendFile(fileNames, paths);
                         }
                         Message.obtain(handler, 0, "正在发送至" + ipAddress + ":" + port).sendToTarget();
                         Thread sendThread = new Thread(new Runnable() {
                             @Override
                             public void run() {
-                                socketManager.SendFile(fileNames, paths, ipAddress, port);
+                                socketManager4Java.SendFile(fileNames, paths);
                             }
                         });
                         sendThread.start();
@@ -184,6 +219,7 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
         //System.exit(0);
     }
 
+
     public String GetIpAddress() {
         WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
         WifiInfo wifiInfo = wifiManager.getConnectionInfo();
@@ -195,4 +231,11 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                 ((i >> 24) & 0xFF);
     }
 
+    public String getIpAddress() {
+        return SSID;
+    }
+
+    public int getPort() {
+        return PASW;
+    }
 }

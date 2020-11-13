@@ -1,4 +1,4 @@
-package com.ruiweishen.a2atranfer;
+package com.example.a2atranfer;
 
 /**
  * @author: LiuSaiSai

@@ -1,4 +1,4 @@
-package com.ruiweishen.a2atranfer.struct;
+package com.example.a2atranfer.struct;
 
 /**
  * @author: LiuSaiSai

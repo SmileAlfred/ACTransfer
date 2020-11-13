@@ -1,9 +1,8 @@
-package com.ruiweishen.a2atranfer;
+package com.example.a2atranfer;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 
 /**
  * @author: LiuSaiSai

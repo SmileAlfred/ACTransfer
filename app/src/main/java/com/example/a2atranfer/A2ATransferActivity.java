@@ -40,8 +40,8 @@ import java.util.Date;
 public class A2ATransferActivity extends AppCompatActivity implements View.OnClickListener {
     private static final int FILE_CODE = 0;
     private static final int REQUEST_CODE = 1;
-    private TextView tvMsg, tv_test;
-    private EditText txtIP, txtPort, txtEt;
+    private TextView tv_local_ip, tv_log;
+    private EditText et_target_ip, et_target_port, tv_trans_msg;
     private Button btnSend;
     private Handler handler;
     private SocketManager4Java socketManager4Java;
@@ -55,7 +55,10 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
             "android.permission.CHANGE_NETWORK_STATE"};
 
     private final String TAG = A2ATransferActivity.this.getClass().getSimpleName();
-    private final String SSID = "奥特曼打小怪兽";
+    private final String SSID = "AutoManVSXiaoGuaiGuai";
+    private final String RemoteIPAddress = "192.168.1.10";
+    private final int Port = 9996;
+
     private final int PASW = 123456789;
 
     @Override
@@ -64,7 +67,7 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
         setContentView(R.layout.activity_a2a_transfer);
         ActivityCompat.requestPermissions(A2ATransferActivity.this, PERMISSIONS_STORAGE, REQUEST_CODE);
         initView();
-        txtPort.setText("9996");
+        et_target_port.setText("9996");
 
         getParam("20", "20");
 
@@ -74,10 +77,10 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                 switch (msg.what) {
                     case 0:
                         SimpleDateFormat format = new SimpleDateFormat("hh:mm:ss");
-                        txtEt.append("\n[" + format.format(new Date()) + "]" + msg.obj.toString());
+                        tv_trans_msg.append("\n[" + format.format(new Date()) + "]" + msg.obj.toString());
                         break;
                     case 1:
-                        tvMsg.setText("本机IP：" + GetIpAddress() + " 监听端口:" + msg.obj.toString());
+                        tv_local_ip.setText("本机IP：" + GetIpAddress() + " 监听端口:" + msg.obj.toString());
                         break;
                     case 2:
                         Toast.makeText(getApplicationContext(), msg.obj.toString(), Toast.LENGTH_SHORT).show();
@@ -124,11 +127,11 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
     }
 
     private void initView() {
-        tvMsg = (TextView) findViewById(R.id.tv_local_ip);
-        txtIP = (EditText) findViewById(R.id.et_ip);
-        txtPort = (EditText) findViewById(R.id.et_port);
-        txtEt = (EditText) findViewById(R.id.tv_msg);
-        tv_test = findViewById(R.id.tv_test);
+        tv_local_ip = (TextView) findViewById(R.id.tv_local_ip);
+        et_target_ip = (EditText) findViewById(R.id.et_target_ip);
+        et_target_port = (EditText) findViewById(R.id.et_target_port);
+        tv_trans_msg = (EditText) findViewById(R.id.tv_trans_msg);
+        tv_log = findViewById(R.id.tv_log);
 
         btnSend = (Button) findViewById(R.id.btnSend);
         btnSend.setOnClickListener(this);
@@ -161,8 +164,8 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         Log.i(TAG, "onActivityResult: + resultCode" + resultCode);
         if (requestCode == FILE_CODE && resultCode == Activity.RESULT_OK) {
-            final String ipAddress = txtIP.getText().toString();
-            final int port = Integer.parseInt(txtPort.getText().toString());
+            final String ipAddress = et_target_ip.getText().toString();
+            final int port = Integer.parseInt(et_target_port.getText().toString());
             if (data.getBooleanExtra(FilePickerActivity.EXTRA_ALLOW_MULTIPLE, true)) {
                 // For JellyBean and above
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
@@ -231,11 +234,11 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                 ((i >> 24) & 0xFF);
     }
 
-    public String getIpAddress() {
-        return SSID;
+    public String getRemoteIpAddress() {
+        return RemoteIPAddress;
     }
 
     public int getPort() {
-        return PASW;
+        return Port;
     }
 }

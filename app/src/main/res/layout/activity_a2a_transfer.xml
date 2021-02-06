@@ -27,9 +27,9 @@
 
             <EditText
                 android:id="@+id/et_target_ip"
-                android:layout_marginTop="15dp"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="15dp"
                 android:contentDescription="目标IP地址"
                 android:ems="10"
                 android:text="192.168.1.10" />
@@ -39,9 +39,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_below="@+id/et_target_ip"
-                android:text="9996"
                 android:layout_alignLeft="@+id/et_target_ip"
-                android:ems="10" />
+                android:ems="10"
+                android:text="9999" />
 
             <EditText
                 android:id="@+id/tv_trans_msg"
@@ -82,8 +82,18 @@
                 android:text=""
                 android:textColor="#090909"
                 android:textSize="16sp" />
-
-
+            <Button
+                android:id="@+id/btn_send_content"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/tv_log"
+                android:text="发送" />
+            <EditText
+                android:id="@+id/et_content"
+                android:layout_toRightOf="@+id/btn_send_content"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_below="@+id/tv_log" />
         </RelativeLayout>
     </ScrollView>
 
@@ -91,13 +101,14 @@
         android:id="@+id/fl_wifi"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:visibility="gone"
-        android:background="#33000000">
+        android:background="#33000000"
+        android:visibility="gone">
+
         <ListView
             android:id="@+id/lv_wifi"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_margin="20dp"/>
+            android:layout_margin="20dp" />
     </FrameLayout>
 
 </RelativeLayout>

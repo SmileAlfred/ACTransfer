@@ -25,7 +25,7 @@
         android:requestLegacyExternalStorage="true"
         android:theme="@style/AppTheme" >
 
-        <activity android:name="com.example.a2atranfer.A2ATransferActivity"
+        <activity android:name="com.example.a2atranfer.activity.A2ATransferActivity"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

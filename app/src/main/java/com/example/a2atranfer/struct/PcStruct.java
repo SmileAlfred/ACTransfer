@@ -38,9 +38,6 @@ public class PcStruct {
     public static final String TAG = PcStruct.class.getClass().getSimpleName();
 
 
-    public PcStruct(byte[] buf) {
-        this.buf = buf;
-    }
 
     /**
      * 通过接收到的 byte[] 对象解析成结构体对象；

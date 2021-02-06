@@ -1,4 +1,4 @@
-package com.example.a2atranfer;
+package com.example.a2atranfer.utils;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;

@@ -1,15 +1,19 @@
 package com.example.a2atranfer.utils;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 
+import androidx.core.app.ActivityCompat;
+
 import java.util.List;
 
-public  class WifiUtil {
+public class WifiUtil {
     // 定义WifiManager对象
     private WifiManager mWifiManager;
 
@@ -24,22 +28,27 @@ public  class WifiUtil {
     }
 
     // 获取 已连WiFi 名称
-    public  static String getWIFIName(Activity activity) {
-        WifiManager wifiMgr = (WifiManager) activity.getSystemService(Context.WIFI_SERVICE);
+    //注意：info.getSSID() 得到的是 “SmileAlfred”;实际上需要的是 SmileAlfred
+    public static String getWIFIName(Activity activity) {
+        WifiManager wifiMgr = (WifiManager) activity.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         WifiInfo info = wifiMgr.getConnectionInfo();
-        //输出字符串有双引号
-        String wifiId = info != null ? info.getSSID() : null;
-        return wifiId;
-
-       /* WifiManager wifiMgr = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
-        int wifiState = wifiMgr.getWifiState();
-        WifiInfo info = wifiMgr.getConnectionInfo();
-        String wifiId = info != null ? info.getSSID().replace("\"", "") : null;
-        */
+        String SSID =info.getSSID().replaceAll("\"","");
+        return SSID;
     }
+
 
     // 查看以前是否也配置过这个网络
     private WifiConfiguration IsExsits(String SSID) {
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return null;
+        }
         List<WifiConfiguration> existingConfigs = mWifiManager.getConfiguredNetworks();
         if (existingConfigs != null) {
             for (WifiConfiguration existingConfig : existingConfigs) {
@@ -136,6 +145,16 @@ public  class WifiUtil {
      * 获取配置过的wifiConfiguration
      */
     public WifiConfiguration getExitsWifiConfig(String SSID) {
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return null;
+        }
         List<WifiConfiguration> wifiConfigurationList = mWifiManager.getConfiguredNetworks();
         for (WifiConfiguration wifiConfiguration : wifiConfigurationList) {
             if (wifiConfiguration.SSID.equals("\"" + SSID + "\"")) {

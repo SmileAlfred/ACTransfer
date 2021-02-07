@@ -9,6 +9,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
@@ -20,11 +22,13 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -32,6 +36,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 import com.example.a2atranfer.R;
+import com.example.a2atranfer.beans.MsgBean;
 import com.example.a2atranfer.client.TCPClient;
 import com.example.a2atranfer.observer.mFileListener;
 import com.example.a2atranfer.socket.SocketManager4Java;
@@ -73,6 +78,7 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
     private TextView tv_local_ip, tv_log;
     private EditText et_target_ip, et_target_port, tv_trans_msg, et_content;
     private Button btnSend, btn_send_content;
+    private ImageView iv_test;
     private Handler handler;
 
     //private SocketManager4Java socketManager4Java;
@@ -91,13 +97,13 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
             SERVERGETMSG = 4,
             LOG = 5;
 
-    private boolean connectSuccessful = false;
+    public static boolean connectSuccessful = false,
+            wifiIsOpen = false;
 
     public static final String FILE_PATH = Environment.getExternalStorageDirectory().getAbsolutePath() + "/DCIM/Camera";
     private String date, connectedSSID = "";
     private SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd"),
             timeFormat = new SimpleDateFormat("HH:mm:ss");
-    private boolean wifiIsOpen = false;
 
     private mFileListener fileListener = new mFileListener(FILE_PATH);
     //1. 获取通道
@@ -120,7 +126,6 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
         mWifiManager = (WifiManager) A2ATransferActivity.this.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         mWifiUtil = new WifiUtil(A2ATransferActivity.this.getApplication());
 
-
         //监听 WiFi 连接状态
         IntentFilter filter = new IntentFilter();
         filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
@@ -135,7 +140,7 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                         tv_trans_msg.append("\n[" + format.format(new Date()) + "]" + msg.obj.toString());
                         break;
                     case LOCALIPMSG:
-                        tv_local_ip.setText("本机IP：" + GetIpAddress() + " 监听端口:" + msg.obj.toString());
+                        tv_local_ip.setText(msg.obj.toString());
                         break;
                     case SOMEMSG:
                         Toast.makeText(getApplicationContext(), msg.obj.toString(), Toast.LENGTH_SHORT).show();
@@ -145,13 +150,15 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                         //TODO:对【客户端】接收到的【来自服务器】的消息
                         switch (data) {
                             case "Hello":
-                                MyUtils.playSound(A2ATransferActivity.this, 0);
-                                connectSuccessful = true;
-                                tv_local_ip.setText("正在进行通信...");
+
                                 break;
                             default:
+                                tv_trans_msg.append("\nServe:" + data);
                                 break;
                         }
+                        break;
+                    case LOG:
+                        tv_trans_msg.append("\nClient:" + msg.obj.toString());
                         break;
                     default:
                         break;
@@ -168,6 +175,10 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
      * 创建套接字进行通信
      */
     private void connectWifiSocket() {
+        if (!wifiIsOpen) {
+            tv_local_ip.setText("WIFI 未开启！");
+            return;
+        }
         String log = "\t开始 connectWifiSocket()：\t" + WifiUtil.getWIFIName(A2ATransferActivity.this);
         writePadLog(log);
 
@@ -176,61 +187,45 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
             public void run() {
                 String log = "\t开始 connectWifiSocket() - 线程中：\t" + WifiUtil.getWIFIName(A2ATransferActivity.this);
                 writePadLog(log);
-                mTcpClient.requestConnectTcp(RemoteIPAddress);
-                while (true) {
-                    if(connectSuccessful)break;
-                    mTcpClient.sendMsg("Hello");
-                    Log.i(TAG, "run: 发送了 Hello");
-                    try {
-                        Thread.sleep(2000);
-                    } catch (InterruptedException e) {
-                    }
-                }
-                    /*try {
-                        log = "\t开始 connectWifiSocket() - 线程-循环-进入 try 中：\t" + WifiUtil.getWIFIName(A2ATransferActivity.this);
-                        writePadLog(log);
 
-                        //TODO:发送握手命令
-                        while (null == sChannel) {
+                try {
+                    connectedSSID = WifiUtil.getWIFIName(A2ATransferActivity.this);
+                    //TODO:handler实现
+                    Message mMessage = new Message();
+                    mMessage.obj = "WIFI 连接到：" + connectedSSID;
+                    mMessage.what = A2ATransferActivity.LOCALIPMSG;
+                    handler.sendMessage(mMessage);
+
+                    //WiFi自动重连
+                    if (!SSID.equals(connectedSSID)) {
+                        WifiConfiguration tempConfig = isExist(connectedSSID);
+                        if (tempConfig != null) {
+                            //则清除旧有配置
+                            mWifiManager.removeNetwork(tempConfig.networkId);
+                        }
+                        mWifiUtil.addNetWork(SSID, PASW, 3);
+                        Thread.sleep(1000);
+                    } else {
+                        mTcpClient.requestConnectTcp(RemoteIPAddress);
+                        MsgBean msg = new MsgBean(MsgBean.ORDER_REQUEST_CONNECTION,"",0);
+                        while (true) {
+                            if (connectSuccessful) break;
+                            mTcpClient.sendMsg(msg);
+                            Log.i(TAG, "run: 发送了 Hello");
                             try {
-                                mTcpClient.sendMsg("1_你好吗？");
-
-                            } catch (Exception e) {
-                                Log.i(TAG, "报错： " + e.getMessage());
-                                try {
-                                    Thread.sleep(200);
-                                } catch (InterruptedException ex) {
-                                }
+                                Thread.sleep(2000);
+                            } catch (InterruptedException e) {
                             }
                         }
+                    }
 
-                        //开启接收方法
-                        //receiveOrder();
-                    } catch (Exception e) {
-                        log = "\t捕获 connectWifiSocket()异常：\t" + e.getMessage() + "\t" + WifiUtil.getWIFIName(A2ATransferActivity.this);
-                        writePadLog(log);
-                        try {
-                            connectedSSID = WifiUtil.getWIFIName(A2ATransferActivity.this);
 
-                            //WiFi自动重连
-                            if (!SSID.equals(connectedSSID)) {
-                                WifiConfiguration tempConfig = isExist(connectedSSID);
-                                if (tempConfig != null) {
-                                    //则清除旧有配置
-                                    mWifiManager.removeNetwork(tempConfig.networkId);
-                                }
-                                mWifiUtil.addNetWork(SSID, PASW, 3);
-                                Thread.sleep(1000);
-                            }
-                            log = "\t捕获 connectWifiSocket()异常-我是努力连接过的！：\t" + e.getMessage() + "\t" + WifiUtil.getWIFIName(A2ATransferActivity.this);
-                            writePadLog(log);
-                        } catch (Exception ex) {
-                            log = "\t捕获 connectWifiSocket()异常-努力连接-报错了！：\t" + e.getMessage() + "\t" + WifiUtil.getWIFIName(A2ATransferActivity.this);
-                            writePadLog(log);
-                        }
-                        log = "\t捕获 connectWifiSocket()异常末尾：\t" + e.getMessage() + "\t" + WifiUtil.getWIFIName(A2ATransferActivity.this);
-                        writePadLog(log);
-                    }*/
+                } catch (Exception ex) {
+                    log = "\t捕获 connectWifiSocket()异常-努力连接-报错了！：\t" + ex.getMessage() + "\t" + WifiUtil.getWIFIName(A2ATransferActivity.this);
+                    writePadLog(log);
+                }
+
+
             }
         }).start();
     }
@@ -241,11 +236,13 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
         et_target_ip = findViewById(R.id.et_target_ip);
         et_target_port = findViewById(R.id.et_target_port);
         tv_trans_msg = findViewById(R.id.tv_trans_msg);
+        iv_test = findViewById(R.id.iv_test);
+
 
         et_content = findViewById(R.id.et_content);
-        btn_send_content = findViewById(R.id.btn_send_content);
 
         btnSend = findViewById(R.id.btnSend);
+        btn_send_content = findViewById(R.id.btn_send_content);
         btnSend.setOnClickListener(this);
         btn_send_content.setOnClickListener(this);
     }
@@ -254,31 +251,25 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
     public void onClick(View v) {
         switch (v.getId()) {
             case R.id.btn_send_content:
-                if (sChannel == null || !sChannel.isConnected()) {
-                    Toast.makeText(this, "sChannel == null", Toast.LENGTH_SHORT).show();
+                if (!connectSuccessful) {
+                    Toast.makeText(this, "无法进行通信", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                String content = et_content.getText().toString();
-
-                //3. 分配指定大小的缓冲区
-                ByteBuffer buf = ByteBuffer.allocate(1024);
                 try {
-                    //4. 发送数据给服务端
-
-                    while (!"exist;;".equals(content)) {
-                        buf.put((new Date().toString() + "\n客户端：" + content).getBytes());
-                        buf.flip();
-                        Log.i(TAG, "sChannel = " + sChannel + " ; buf = " + buf);
-                        sChannel.write(buf);
-                        buf.clear();
-                    }
-
-                    //5. 关闭通道
-                    //sChannel.close();
-                } catch (IOException e) {
+                    String content = et_content.getText().toString();
+                    MsgBean msg = new MsgBean(MsgBean.ORDER_SEND_STR,content,0);
+                    mTcpClient.sendMsg(msg);
+                } catch (Exception e) {
+                    Logger.i(TAG, " btn_send_content 报错：" + e.getMessage());
                 }
+                //5. 关闭通道
+                //sChannel.close();
                 break;
             case R.id.btnSend:
+                if (!connectSuccessful) {
+                    Toast.makeText(this, "无法进行通信", Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 Intent i = new Intent(A2ATransferActivity.this, FilePickerActivity.class);
                 i.putExtra(FilePickerActivity.EXTRA_ALLOW_MULTIPLE, true);
                 i.putExtra(FilePickerActivity.EXTRA_ALLOW_CREATE_DIR, false);
@@ -313,10 +304,29 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                     if (clip != null) {
                         for (int i = 0; i < clip.getItemCount(); i++) {
                             Uri uri = clip.getItemAt(i).getUri();
-                            paths.add(uri.getPath());
+                            String path = uri.getPath().replaceAll("/root/", "");
+                            paths.add(path);
                             fileNames.add(uri.getLastPathSegment());
                         }
-                        Message.obtain(handler, 0, "正在发送至" + ipAddress + ":" + port).sendToTarget();
+
+
+                        for (String s : fileNames) {
+                            Message.obtain(handler, 0, "正在发送 " + s + " 至" + ipAddress + ":" + port).sendToTarget();
+                        }
+                        new Thread(new Runnable() {
+                            @Override
+                            public void run() {
+                                for (String path : paths) {
+                                    try {
+                                        Message.obtain(handler, 0, "正在发送 " + path).sendToTarget();
+                                        //BUG:报错：NetworkOnMainThreadException；请求网络一定要在子线程中进行
+                                        mTcpClient.sendFile(path);
+                                    } catch (Exception e) {
+                                        Logger.i(TAG, "发送文件 " + path + " 报错：" + e.getMessage());
+                                    }
+                                }
+                            }
+                        }).start();
                         Thread sendThread = new Thread(new Runnable() {
                             @Override
                             public void run() {
@@ -339,7 +349,9 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                             //TODO:发送文件
                             //socketManager4Java.SendFile(fileNames, paths);
                         }
-                        Message.obtain(handler, 0, "正在发送至" + ipAddress + ":" + port).sendToTarget();
+                        for (String s : fileNames) {
+                            Message.obtain(handler, 0, "正在发送 " + s + " 至" + ipAddress + ":" + port).sendToTarget();
+                        }
                         Thread sendThread = new Thread(new Runnable() {
                             @Override
                             public void run() {
@@ -411,13 +423,12 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                     if (!localNetworkInfo.isConnected()) {
                         tv_local_ip.setText("WIFI 未连接");
                     }
+                    //TODO:做网络通信的测试
+                    connectWifiSocket();
                 } else {
                     tv_local_ip.setText("WiFi 未开启！");
                     wifiIsOpen = false;
-                    wifiIsOpen = true;
                 }
-                //TODO:做网络通信的测试
-                connectWifiSocket();
             }
         }
     };
@@ -472,4 +483,5 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
         }
         return null;
     }
+
 }

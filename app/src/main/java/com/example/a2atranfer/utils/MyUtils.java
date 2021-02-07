@@ -62,7 +62,19 @@ public class MyUtils {
     }
 
 
-
+    /**
+     * @param size KB
+     * @return 根据文件具体大小 返回对应的 缓存区大小
+     */
+    public static int bufSize(long size) {
+        long KB = (size / 1024);
+        long MB = KB / 1024;
+        long GB = MB / 1024;
+        if (GB > 0) return 1024 * 1024 * 1024;// ?GB
+        if (MB > 0) return 1024 * 1024;// ?MB
+        if (KB > 0) return 1024;
+        return 1024 * 1024;
+    }
     /**
      * 根据手机的分辨率从 dip 的单位 转成为 px(像素)
      */

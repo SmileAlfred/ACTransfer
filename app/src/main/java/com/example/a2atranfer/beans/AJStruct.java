@@ -1,4 +1,4 @@
-package com.example.a2atranfer.struct;
+package com.example.a2atranfer.beans;
 
 /**
  * 通过新协议 是否 是文件信息（0 - 1 ），文件信息长度（int），文件内容长度（long）

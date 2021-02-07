@@ -6,7 +6,7 @@ import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
 
-import com.example.a2atranfer.struct.PcStruct;
+import com.example.a2atranfer.beans.PcStruct;
 import com.example.a2atranfer.utils.MD5FileUtils;
 import com.example.a2atranfer.utils.TxtUtils;
 

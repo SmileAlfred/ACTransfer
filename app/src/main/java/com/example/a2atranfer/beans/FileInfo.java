@@ -1,4 +1,4 @@
-package com.example.a2atranfer.struct;
+package com.example.a2atranfer.beans;
 
 import java.io.IOException;
 import java.io.InputStream;

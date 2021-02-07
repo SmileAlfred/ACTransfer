@@ -7,5 +7,13 @@
         <item>android.permission.CHANGE_WIFI_STATE</item>
         <item>android.permission.ACCESS_NETWORK_STATE</item>
         <item>android.permission.CHANGE_NETWORK_STATE</item>
+
+        Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+
+        <item>android.permission.ACCESS_BACKGROUND_LOCATION</item>
+        <item>android.permission.ACCESS_FINE_LOCATION</item>
+        <item>android.permission.ACCESS_COARSE_LOCATION</item>
     </string-array>
 </resources>

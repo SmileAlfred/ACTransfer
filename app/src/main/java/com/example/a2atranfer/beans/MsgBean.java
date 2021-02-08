@@ -52,25 +52,25 @@ public class MsgBean {
         this.msg_code = msg_code;
         this.fileName = fileName;
         this.fileLength = fileLength;
-        this.fileNameLength = fileName.getBytes().length;
 
 
         byte[] intBytes = new byte[4];
         byte[] longBytes = new byte[8];
-        byte[] fileNameBytes = new byte[fileNameLength];
-        this.buf = new byte[12 + fileNameLength];
+        this.buf = new byte[64];
 
         //发送命令
-        intBytes = FormatUtils.toLH(this.msg_code);
+        intBytes = FormatUtils.int2Bytes(this.msg_code);
         System.arraycopy(intBytes, 0, buf, 0, 4);
 
-        //发送文件名
-        fileNameBytes = fileName.getBytes();
-        System.arraycopy(fileNameBytes, 0, buf, 4, fileNameLength);
-
         //发送文件大小
-        longBytes = FormatUtils.toLH(this.fileLength);
-        System.arraycopy(longBytes, 0, buf, 4+fileNameLength, 8);
+        longBytes = FormatUtils.long2Bytes(this.fileLength);
+        System.arraycopy(longBytes, 0, buf, 4 , 8);
+
+        //发送文件名
+        byte[]  fileNameBytes = fileName.getBytes();
+        System.arraycopy(fileNameBytes, 0, buf, 12, fileNameBytes.length);
+
+        this.fileNameLength = fileName.getBytes().length;
     }
 
 
@@ -83,20 +83,23 @@ public class MsgBean {
         MsgBean msgBean = new MsgBean();
         byte[] intBytes = new byte[4];
         byte[] longBytes = new byte[8];
-        int fileNameLength = buffer.length - 12;
-        byte[] fileNameBytes = new byte[fileNameLength];
+        int others = buffer.length - 12;
+        byte[] fileNameBytes = new byte[others];
 
         //获取命令
         System.arraycopy(buffer, 0, intBytes, 0, 4);
-        msgBean.msg_code = FormatUtils.byteArrayToInt(intBytes);
-
-        //获取文件名
-        System.arraycopy(buffer, 4, fileNameBytes, 0, fileNameLength);
-        msgBean.fileName = new String(fileNameBytes);
+        msgBean.setMsg_code(FormatUtils.byteArrayToInt(intBytes));
 
         //获取文件大小
-        System.arraycopy(buffer, 4+fileNameLength, longBytes, 0, 8);
-        msgBean.fileName = new String(fileNameBytes);
+        System.arraycopy(buffer, 4 , longBytes, 0, 8);
+        msgBean.setFileLength(FormatUtils.bytes2Long(longBytes));
+
+        //获取文件名
+        System.arraycopy(buffer, 12, fileNameBytes, 0, others);
+        msgBean.setFileName(new String(fileNameBytes).trim());
+
+        //获取文件 名长度
+        msgBean.setFileNameLength(msgBean.fileName .getBytes().length);
 
         return msgBean;
     }
@@ -129,7 +132,7 @@ public class MsgBean {
         return fileLength;
     }
 
-    public void setFileLength(int fileLength) {
+    public void setFileLength(long fileLength) {
         this.fileLength = fileLength;
     }
 
@@ -145,9 +148,9 @@ public class MsgBean {
     public String toString() {
         return "MsgBean{" +
                 "msg_code=" + msg_code +
-                ", fileNameLength=" + fileNameLength +
                 ", fileLength=" + fileLength +
                 ", fileName='" + fileName + '\'' +
+                ", fileNameLength=" + fileNameLength +
                 '}';
     }
 }

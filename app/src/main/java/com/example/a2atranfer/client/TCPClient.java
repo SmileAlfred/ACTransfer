@@ -3,18 +3,15 @@ package com.example.a2atranfer.client;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Message;
-import android.text.TextUtils;
 import android.util.Log;
-import android.widget.Toast;
 
 import com.example.a2atranfer.activity.A2ATransferActivity;
 import com.example.a2atranfer.beans.MsgBean;
 import com.example.a2atranfer.utils.Logger;
 import com.example.a2atranfer.utils.MyUtils;
 
-import java.io.BufferedInputStream;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -23,9 +20,8 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
-import java.util.Arrays;
+import java.util.Date;
 import java.util.Iterator;
-import java.util.Scanner;
 import java.util.Set;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.SynchronousQueue;
@@ -36,9 +32,13 @@ import java.util.concurrent.TimeUnit;
 public class TCPClient {
     private static final String TAG = TCPClient.class.getSimpleName();
 
-    private String mSendMsg;
-    private byte[] msgBuf;
-    private String mClientName;     // 客户端命名
+    private byte[] msgBytes;
+    private ByteBuffer byteBufMsg, byteBufContent;
+
+    private String mClientName,             //客户端命名
+            fileWholeName;                  //文件 路径+名称
+    private boolean transfering = false;    //是否正在传输文件？
+
     private Selector mSelector;
     private SocketChannel mSocketChannel;
 
@@ -50,7 +50,7 @@ public class TCPClient {
     public TCPClient(Context context, Handler handler, String clientName) {
         this.mContext = context;
         this.mHandler = handler;
-        msgBuf = new byte[128];
+        byteBufMsg = ByteBuffer.allocate(64);
         init(clientName);
     }
 
@@ -132,10 +132,6 @@ public class TCPClient {
                         handleConnect();
                     }
                     if (selectionKey.isValid() && selectionKey.isReadable()) {
-                        Message mMessage = new Message();
-                        mMessage.obj = "handleRead() 前" ;
-                        mMessage.what = A2ATransferActivity.LOG;
-                        mHandler.sendMessage(mMessage);
                         handleRead();
                     }
                     if (selectionKey.isValid() && selectionKey.isWritable()) {
@@ -151,107 +147,184 @@ public class TCPClient {
     }
 
     private void handleConnect() throws IOException {
+        //如果此前未连接，那么提醒 此时已连接
+        if (!A2ATransferActivity.connectSuccessful) {
+            MyUtils.playSound(mContext, 0);
+            A2ATransferActivity.connectSuccessful = true;
+
+            Message mMessage = new Message();
+            mMessage.obj = "正在进行通信...";
+            mMessage.what = A2ATransferActivity.LOCALIPMSG;
+            mHandler.sendMessage(mMessage);
+
+            Message message = new Message();
+            message.obj = "服务端同意了连接请求";
+            message.what = A2ATransferActivity.LOG;
+            mHandler.sendMessage(message);
+        }
+
         // 判断此通道上是否正在进行连接操作。
         if (mSocketChannel.isConnectionPending()) {
             mSocketChannel.finishConnect();
             mSocketChannel.register(mSelector, SelectionKey.OP_READ);
-            Log.i(TAG, mClientName + " 请求跟服务端建立连接");
         }
     }
 
-    private void handleRead()  {
+    private void handleRead() {
+        if (transfering) return;
+        try {
+            //读取服务器发送来的数据到缓冲区中
+            byteBufMsg = ByteBuffer.allocate(64);
+            int bytesRead = mSocketChannel.read(byteBufMsg);
 
-        ByteBuffer byteBuffer = ByteBuffer.allocate(128);
-       try{
-           int bytesRead = mSocketChannel.read(byteBuffer);
-           Message mMessage = new Message();
-           mMessage.obj = "handleRead() 中："+Arrays.toString(byteBuffer.array()) ;
-           mMessage.what = A2ATransferActivity.LOG;
-           mHandler.sendMessage(mMessage);
+            //发送来的消息 非空，那么读取
+            if (bytesRead > 0) {
+                //对消息进行处理，若发来的是文件，那么返回文件大小（byte）
+                long fileLength = handleReceivedMsg(byteBufMsg.array());
+                //如果文件大小 > 0 ,那么就是开辟一个新的缓存区，对文件进行接收
+                if (fileLength > 0) {
+                    Message.obtain(mHandler, A2ATransferActivity.LOG, "终于要写入文件了！").sendToTarget();
 
-           if (bytesRead > 0) {
-               MsgBean msgBean = MsgBean.getStruct(byteBuffer.array());
-               switch (msgBean.msg_code) {
-                   case MsgBean.ORDER_REQUEST_CONNECTION://握手
-                       MyUtils.playSound(mContext, 0);
-                       A2ATransferActivity.connectSuccessful = true;
+                    transfering = true;
+                    int bufferSize = (int) MyUtils.bufSize(fileLength);
+                    if (null == byteBufContent || bufferSize != byteBufContent.capacity())
+                        byteBufContent = ByteBuffer.allocate(bufferSize);
 
-                       mMessage = new Message();
-                       mMessage.obj = "正在进行通信...";
-                       mMessage.what = A2ATransferActivity.LOCALIPMSG;
-                       mHandler.sendMessage(mMessage);
-                       break;
-                   case MsgBean.ORDER_REQUEST_IS_RECEIVE://请求是否接收文件？
+                    FileChannel fileChannel = new FileOutputStream(fileWholeName).getChannel();
 
-                       break;
+                    int writed = 0;
+                    int len = -1;
+                    //将客户端写入通道的数据读取并存储到buffer中
+                    while (writed < fileLength) {
+                        //while ((len = client.read(byteBufContent)) > 0) {
+                        len = mSocketChannel.read(byteBufContent);
+                        //这里睡 10ms 很关键！这里是多线程的问题；TODO:多线程解决这个愚蠢的解决方式……
+                        if (len <= 0) {
+                            Thread.sleep(5);
+                            continue;
+                        }
+
+                        writed += len;
+                        //System.out.println(writed + " / "+fileLength + " B");
+                        byteBufContent.flip();//将缓冲区翻转为读模式
+
+                        fileChannel.write(byteBufContent);
+                        Message.obtain(mHandler, A2ATransferActivity.TRANSfERMSG, "接收文件：" + writed + " / " + fileLength + " B").sendToTarget();
 
 
-                   case MsgBean.ORDER_ALLOW_SEND://允许接收文件
-                       Message msg = new Message();
-                       msg.obj = "服务器 同意 我方发送文件";
-                       msg.what = A2ATransferActivity.CLIENTGETMSG;
-                       mHandler.sendMessage(msg);
-                       break;
-                   case MsgBean.ORDER_REJECT_SEND://拒绝接收文件
-                       msg = new Message();
-                       msg.obj = "服务器 拒绝 我方发送文件";
-                       msg.what = A2ATransferActivity.CLIENTGETMSG;
-                       mHandler.sendMessage(msg);
-                       break;
-                   case MsgBean.ORDER_SEND_STR://谨发送消息
-                       msgBean = new MsgBean(MsgBean.ORDER_SEND_STR, "客户端暂时只能发送这些了", 0);
-                       sendMsg(msgBean);
-                       break;
-                   case MsgBean.ORDER_SUCESS__MSG://接收成功
-                       break;
-                   default:
-                       break;
-               }
+                        byteBufContent.clear();//清除本次缓存区内容
 
-           /* String inMsg = new String(byteBuffer.array(), 0, bytesRead);
-            //更新UI：客户端界面显示【服务器返回的消息：】
-            Message msg = new Message();
-            msg.obj = inMsg;
-            msg.what = A2ATransferActivity.CLIENTGETMSG;
-            mHandler.sendMessage(msg);
-            Log.i(TAG, mClientName + " (更新 UI 后)收到服务端数据： " + inMsg);*/
-           } else {
-               Log.i(TAG, mClientName + "  断开跟 服务端的连接");
+                    }
+                    System.out.println(MyUtils.timeFormat.format(new Date()) + ":文件接收完成");
 
-               //更新UI：服务器界面显示【客户端返回的消息：】
-               mMessage = new Message();
-               mMessage.obj = mClientName + " 断开跟 服务端的连接";
-               mMessage.what = A2ATransferActivity.LOG;
-               mHandler.sendMessage(mMessage);
-               disconnectTcp();
-           }
-       }catch (Exception e){
-           Message  mMessage = new Message();
-           mMessage.obj = "handleRead 报错："+e.getMessage();
-           mMessage.what = A2ATransferActivity.LOG;
-           mHandler.sendMessage(mMessage);
-       }
+                    fileChannel.close();
+                    transfering = false;
+                }
 
-    }
+                MsgBean msgBeanReceived = MsgBean.getStruct(byteBufMsg.array());
+                switch (msgBeanReceived.msg_code) {
 
-    private void handleWrite() throws IOException {
-       /* if (TextUtils.isEmpty(mSendMsg)) {
-            //更新UI：服务器界面显示【客户端返回的消息：】
+
+                }
+                byteBufMsg.clear();
+            } else {
+                //disconnectTcp();
+            }
+        } catch (Exception e) {
             Message mMessage = new Message();
-            mMessage.obj = "handleWrite 内容为空";
+            mMessage.obj = "handleRead 报错：" + e.getMessage();
             mMessage.what = A2ATransferActivity.LOG;
             mHandler.sendMessage(mMessage);
+        }
+    }
+
+    /**
+     * 对服务器发送来的 命令 进行解析和处理，
+     *
+     * @param array 命令对象 的 array
+     * @return 返回文件的大小，若不是传输文件返回 -1
+     * @throws Exception
+     */
+    private long handleReceivedMsg(byte[] array) throws Exception {
+        MsgBean msgBeanReceived = MsgBean.getStruct(array);
+        Message.obtain(mHandler, A2ATransferActivity.TRANSfERMSG, "接收到命令：" + msgBeanReceived).sendToTarget();
+
+        MsgBean msgBean4Send;
+        Logger.i(TAG, "客户端收到MSG：" + msgBeanReceived);
+        long fileLength = -1L;
+        int msg_code = msgBeanReceived.getMsg_code();
+        String name;
+        switch (msg_code) {
+            case MsgBean.ORDER_REQUEST_IS_RECEIVE://请求是否接收文件？
+                name = msgBeanReceived.getFileName();
+                Message.obtain(mHandler, A2ATransferActivity.TRANSfERMSG, "服务器正发送文件：" + name).sendToTarget();
+
+                //Test System.out.print("是否接收文件 " + name + "？(Y/N) ");
+
+                fileWholeName = MyUtils.createFile(name);
+                fileLength = msgBeanReceived.getFileLength();
+                Message.obtain(mHandler, A2ATransferActivity.TRANSfERMSG, "我同意接收文件：" + name + " ;文件大小为：" + fileLength + " B").sendToTarget();
+
+                //Thread.sleep(1000);
+                //TODO:判断是否接收
+                //msgBean4Send = new MsgBean(MsgBean.ORDER_ALLOW_SEND, "允许服务器发送", 0);
+                //sendMsg(msgBean4Send);
+
+
+                //Test          break;
+                //Test      case "N":
+                //Test          msgBean4Send = new MsgBean(MsgBean.ORDER_REJECT_SEND, "", 0);
+                //Test          sendMsg(selectionKey, msgBean4Send);
+                //Test          break;
+                //Test      default:
+                //Test          scanner.close();
+                //Test          break;
+                //Test  }
+                break;
+            case MsgBean.ORDER_ALLOW_SEND://允许接收文件
+                Message msg = new Message();
+                msg.obj = "服务器 同意 我方发送文件";
+                msg.what = A2ATransferActivity.CLIENTGETMSG;
+                mHandler.sendMessage(msg);
+                break;
+            case MsgBean.ORDER_REJECT_SEND://拒绝接收文件
+                msg = new Message();
+                msg.obj = "服务器 拒绝 我方发送文件";
+                msg.what = A2ATransferActivity.CLIENTGETMSG;
+                mHandler.sendMessage(msg);
+                break;
+
+            case MsgBean.ORDER_SEND_STR://谨发送消息
+                //更新UI：服务器界面显示【客户端返回的消息：】
+                Message mMessage = new Message();
+                mMessage.obj = msgBeanReceived;
+                mMessage.what = A2ATransferActivity.SERVER;
+                mHandler.sendMessage(mMessage);
+                break;
+            case MsgBean.ORDER_SUCESS__MSG://接收成功
+                //TODO:服务器接收成功的反馈消息 的处理
+                break;
+            default:
+                break;
+        }
+        return fileLength;
+    }
+
+
+    private void handleWrite() throws IOException {
+        if (null == msgBytes) {
             return;
-        }*/
-        ByteBuffer sendBuffer = ByteBuffer.allocate(128);
+        }
+
+        ByteBuffer sendBuffer = ByteBuffer.allocate(64);
         //sendBuffer.put(mSendMsg.getBytes());
-        sendBuffer.put(msgBuf);
+        sendBuffer.put(msgBytes);
         sendBuffer.flip();
 
         mSocketChannel.write(sendBuffer);
-
-        mSendMsg = null;
+        //不可删除
         mSocketChannel.register(mSelector, SelectionKey.OP_READ);
+        msgBytes = null;
     }
 
     /**
@@ -264,7 +337,8 @@ public class TCPClient {
         if (mSelector == null || !mSelector.isOpen() || mSocketChannel == null || !mSocketChannel.isOpen()) {
             //更新UI：服务器界面显示【客户端返回的消息：】
             Message mMessage = new Message();
-            mMessage.obj = "sendMsg 失败！值为null或未开启";
+            mMessage.obj = "sendMsg失败,mSelector = " + mSelector + " ; mSelector.isOpen() = " + mSelector.isOpen()
+                    + " ; mSocketChannel = " + mSocketChannel + "mSocketChannel.isOpen() = " + mSocketChannel.isOpen();
             mMessage.what = A2ATransferActivity.LOG;
             mHandler.sendMessage(mMessage);
 
@@ -272,15 +346,15 @@ public class TCPClient {
         }
 
         //mSendMsg = msg;
-        msgBuf = msg.getBuf();
+        msgBytes = msg.getBuf();
         mSocketChannel.register(mSelector, SelectionKey.OP_WRITE);
         mSelector.wakeup();
 
-        /*//更新UI：服务器界面显示【客户端返回的消息：】
+        /*//更新UI：服务器界面显示【客户端返回的消息：】*/
         Message mMessage = new Message();
-        mMessage.obj = "已发送：" + mSendMsg;
+        mMessage.obj = msg.fileName;
         mMessage.what = A2ATransferActivity.LOG;
-        mHandler.sendMessage(mMessage);*/
+        mHandler.sendMessage(mMessage);
     }
 
 
@@ -317,6 +391,7 @@ public class TCPClient {
 
         /****************向服务端写入文件内容 *********************/
         ByteBuffer byteBufFile = ByteBuffer.allocateDirect(MyUtils.bufSize(size));
+
         int len = -1;
         while ((len = fileChannel.read(byteBufFile)) != -1) {
             byteBufFile.flip();

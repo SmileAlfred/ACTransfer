@@ -25,8 +25,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -39,6 +41,11 @@ import java.util.List;
  * 5. 删除文件等一些公共方法
  */
 public class MyUtils {
+
+    public static String  regEx = "/root/", maoHao = ":";
+    public static SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyyMMdd-HHmmss"),
+            dateFormat = new SimpleDateFormat("yyyy-MM-dd"),
+            timeFormat = new SimpleDateFormat("HH:mm:ss");
     /**
      * 重写 onTouchEvent 隐藏键盘
      *
@@ -263,4 +270,61 @@ public class MyUtils {
             }
         }
     });
+
+    /**
+     * @param fileName 文件名 test.txt
+     * @return /A2JTransfer/test.txt
+     */
+    public static String createFile(String fileName) {
+        File sdCardDir = Environment.getExternalStorageDirectory();
+        File buildDir = new File(sdCardDir, File.separator + "A2ATransfer"+File.separator+"receiveFile" + File.separator);
+        if (!buildDir.exists()) buildDir.mkdirs();
+         String name = (buildDir.getPath() + File.separator + fileName).replaceAll(regEx, "").replaceAll(maoHao, "");
+
+        File testFile = new File(name);
+        File fileParent = testFile.getParentFile();//返回的是File类型,可以调用exsit()等方法
+        if (!fileParent.exists()) {
+            fileParent.mkdirs();// 能创建多级目录
+        }
+        if (!testFile.exists()) {
+            try {
+                testFile.createNewFile();//有路径才能创建文件
+            } catch (IOException e) {
+            }
+        } else {
+            //创建副本
+            int i = name.lastIndexOf('.');
+            name = insertStr(name, "_" + dateTimeFormat.format(new Date()), i);
+
+            testFile = new File(name);
+            try {
+                testFile.createNewFile();//有路径才能创建文件
+            } catch (IOException e) {
+            }
+        }
+        return name;
+    }
+
+    /**
+     * 给 String 中插入字符
+     *
+     * @param src      原 str
+     * @param des      待插入 Str
+     * @param positoin 插入的位置，（插在该点之前）
+     */
+    public static String insertStr(String src, String des, int positoin) {
+        StringBuffer stringBuffer = new StringBuffer(src);
+        return stringBuffer.insert(positoin, des).toString();
+
+    }
+
+
+
+
+
+
+
+
+
+
 }

@@ -95,7 +95,8 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
             SOMEMSG = 2,
             CLIENTGETMSG = 3,
             SERVERGETMSG = 4,
-            LOG = 5;
+            LOG = 5,
+            SERVER = 6;
 
     public static boolean connectSuccessful = false,
             wifiIsOpen = false;
@@ -136,8 +137,7 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
             public void handleMessage(Message msg) {
                 switch (msg.what) {
                     case TRANSfERMSG:
-                        SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss");
-                        tv_trans_msg.append("\n[" + format.format(new Date()) + "]" + msg.obj.toString());
+                        tv_trans_msg.append("[" + timeFormat.format(new Date()) + "]" + msg.obj.toString() + "\n");
                         break;
                     case LOCALIPMSG:
                         tv_local_ip.setText(msg.obj.toString());
@@ -153,12 +153,15 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
 
                                 break;
                             default:
-                                tv_trans_msg.append("\nServe:" + data);
+                                tv_trans_msg.append("Serve:" + data + "\n");
                                 break;
                         }
                         break;
                     case LOG:
-                        tv_trans_msg.append("\nClient:" + msg.obj.toString());
+                        tv_trans_msg.append("[" + timeFormat.format(new Date()) + "]" + "Client:" + msg.obj.toString() + "\n");
+                        break;
+                    case SERVER:
+                        tv_trans_msg.append("[" + timeFormat.format(new Date()) + "]" + "Server:" + msg.obj.toString() + "\n");
                         break;
                     default:
                         break;
@@ -206,8 +209,13 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                         mWifiUtil.addNetWork(SSID, PASW, 3);
                         Thread.sleep(1000);
                     } else {
+                        Message message = new Message();
+                        message.obj = "正在请求跟服务端建立连接...";
+                        message.what = A2ATransferActivity.LOG;
+                        handler.sendMessage(message);
+
                         mTcpClient.requestConnectTcp(RemoteIPAddress);
-                        MsgBean msg = new MsgBean(MsgBean.ORDER_REQUEST_CONNECTION,"",0);
+                        /*MsgBean msg = new MsgBean(MsgBean.ORDER_REQUEST_CONNECTION,"",0);
                         while (true) {
                             if (connectSuccessful) break;
                             mTcpClient.sendMsg(msg);
@@ -216,7 +224,7 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                                 Thread.sleep(2000);
                             } catch (InterruptedException e) {
                             }
-                        }
+                        }*/
                     }
 
 
@@ -233,6 +241,8 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
     private void initView() {
         tv_log = findViewById(R.id.tv_log);
         tv_local_ip = findViewById(R.id.tv_local_ip);
+        tv_local_ip.setOnClickListener(this);
+
         et_target_ip = findViewById(R.id.et_target_ip);
         et_target_port = findViewById(R.id.et_target_port);
         tv_trans_msg = findViewById(R.id.tv_trans_msg);
@@ -257,10 +267,10 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                 }
                 try {
                     String content = et_content.getText().toString();
-                    MsgBean msg = new MsgBean(MsgBean.ORDER_SEND_STR,content,0);
+                    MsgBean msg = new MsgBean(MsgBean.ORDER_SEND_STR, content, 0);
                     mTcpClient.sendMsg(msg);
                 } catch (Exception e) {
-                    Logger.i(TAG, " btn_send_content 报错：" + e.getMessage());
+                    e.printStackTrace();
                 }
                 //5. 关闭通道
                 //sChannel.close();
@@ -281,6 +291,9 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                 Log.i(TAG, "onClick: Environment.getExternalStorageDirectory().getPath()" +
                         Environment.getExternalStorageDirectory().getPath());
                 startActivityForResult(i, FILE_CODE);
+                break;
+            case R.id.tv_local_ip:
+                tv_trans_msg.setText("");
                 break;
             default:
                 break;
@@ -309,20 +322,22 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                             fileNames.add(uri.getLastPathSegment());
                         }
 
-
-                        for (String s : fileNames) {
-                            Message.obtain(handler, 0, "正在发送 " + s + " 至" + ipAddress + ":" + port).sendToTarget();
-                        }
                         new Thread(new Runnable() {
                             @Override
                             public void run() {
-                                for (String path : paths) {
+                                String path, fileName;
+                                for (int i = 0; i < paths.size(); i++) {
+                                    path = paths.get(i);
+                                    long fileSize = new File(path).length();
+                                    fileName = fileNames.get(i);
+                                    Message.obtain(handler, TRANSfERMSG, "正在发送 " + fileName + " 至" + ipAddress + ":" + port).sendToTarget();
                                     try {
-                                        Message.obtain(handler, 0, "正在发送 " + path).sendToTarget();
+                                        MsgBean msgBean = new MsgBean(MsgBean.ORDER_REQUEST_IS_RECEIVE, fileName, fileSize);
+                                        mTcpClient.sendMsg(msgBean);
                                         //BUG:报错：NetworkOnMainThreadException；请求网络一定要在子线程中进行
                                         mTcpClient.sendFile(path);
                                     } catch (Exception e) {
-                                        Logger.i(TAG, "发送文件 " + path + " 报错：" + e.getMessage());
+                                        Message.obtain(handler, 0, "发送文件 " + path + " 报错：" + e.getMessage()).sendToTarget();
                                     }
                                 }
                             }

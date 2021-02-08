@@ -8,6 +8,7 @@ import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.ByteBuffer;
 
 /**
  * @author: LiuSaiSai
@@ -56,6 +57,20 @@ public class FormatUtils {
         return code;
     }
 
+    //byte 数组与 long 的相互转换
+    public static byte[] long2Bytes(long x) {
+        ByteBuffer buffer = ByteBuffer.allocate(8);
+        buffer.putLong(0, x);
+        return buffer.array();
+    }
+
+    public static long bytes2Long(byte[] bytes) {
+        ByteBuffer buffer = ByteBuffer.allocate(8);
+        buffer.put(bytes, 0, bytes.length);
+        buffer.flip();//need flip
+        return buffer.getLong();
+    }
+
     /**
      * 好使！字节数组到int的转换.
      */
@@ -76,7 +91,7 @@ public class FormatUtils {
     /**
      * 将int转为低字节在前，高字节在后的byte数组
      */
-    public static byte[] toLH(int n) {
+    public static byte[] int2Bytes(int n) {
         byte[] b = new byte[4];
         b[0] = (byte) (n & 0xff);
         b[1] = (byte) (n >> 8 & 0xff);
@@ -85,7 +100,7 @@ public class FormatUtils {
         return b;
     }
 
-    public static byte[] toLH(double data) {
+    public static byte[] int2Bytes(double data) {
         long intBits = Double.doubleToLongBits(data);
         byte[] bytes = getLongBytes(intBits);
         return bytes;

@@ -59,6 +59,7 @@
         android:id="@+id/btnSend"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:focusedByDefault="true"
         android:layout_below="@+id/tv_trans_msg"
         android:layout_alignLeft="@+id/et_target_port"
         android:text="选择文件并发送" />
@@ -83,7 +84,8 @@
     <EditText
         android:id="@+id/et_content"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Test"
         android:layout_below="@+id/tv_log"
         android:layout_toRightOf="@+id/btn_send_content" />
 

@@ -42,10 +42,11 @@ import java.util.List;
  */
 public class MyUtils {
 
-    public static String  regEx = "/root/", maoHao = ":";
+    public static String regEx = "/root/", maoHao = ":";
     public static SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyyMMdd-HHmmss"),
             dateFormat = new SimpleDateFormat("yyyy-MM-dd"),
             timeFormat = new SimpleDateFormat("HH:mm:ss");
+
     /**
      * 重写 onTouchEvent 隐藏键盘
      *
@@ -73,14 +74,45 @@ public class MyUtils {
      * @param size KB
      * @return 根据文件具体大小 返回对应的 缓存区大小
      */
-    public static int bufSize(long size) {
-        long KB = (size / 1024);
-        long MB = KB / 1024;
-        long GB = MB / 1024;
+    public static int bufSize(long size) {  //3687515
+        long KB = (size / 1024);            //3,601
+        long MB = KB / 1024;                //3.516
+        long GB = MB / 1024;                //0
         if (GB > 0) return 1024 * 1024 * 1024;// ?GB
         if (MB > 0) return 1024 * 1024;// ?MB
         if (KB > 0) return 1024;
+        if (KB == 0) return (int) size;
         return 1024 * 1024;
+    }
+
+    /**
+     * 返回 文件的大小
+     *
+     * @param size 文件大小 B
+     * @return 如：1024B 返回 1 KB
+     */
+    public static String formatSize(long size) {  //3687515
+        long KB = (size / 1024);            //3,601
+        long MB = KB / 1024;                //3.516
+        // long GB = MB / 1024;                //0
+
+        if (MB > 0) return (size / 1024 / 1024) + " MB";
+        else return (size / 1024) + " KB";
+    }
+
+    /**
+     * 返回 文件的大小
+     *
+     * @param size 文件大小 B
+     * @return 如：1024B 返回 1 KB
+     */
+    public static String formatSize(int size) {  //3687515
+        int KB = (size / 1024);            //3,601
+        int MB = KB / 1024;                //3.516
+        // long GB = MB / 1024;                //0
+
+        if (MB > 0) return (size / 1024 / 1024) + " MB";
+        else return (size / 1024) + " KB";
     }
     /**
      * 根据手机的分辨率从 dip 的单位 转成为 px(像素)
@@ -277,9 +309,9 @@ public class MyUtils {
      */
     public static String createFile(String fileName) {
         File sdCardDir = Environment.getExternalStorageDirectory();
-        File buildDir = new File(sdCardDir, File.separator + "A2ATransfer"+File.separator+"receiveFile" + File.separator);
+        File buildDir = new File(sdCardDir, File.separator + "A2ATransfer" + File.separator + "receiveFile" + File.separator);
         if (!buildDir.exists()) buildDir.mkdirs();
-         String name = (buildDir.getPath() + File.separator + fileName).replaceAll(regEx, "").replaceAll(maoHao, "");
+        String name = (buildDir.getPath() + File.separator + fileName).replaceAll(regEx, "").replaceAll(maoHao, "");
 
         File testFile = new File(name);
         File fileParent = testFile.getParentFile();//返回的是File类型,可以调用exsit()等方法
@@ -289,6 +321,7 @@ public class MyUtils {
         if (!testFile.exists()) {
             try {
                 testFile.createNewFile();//有路径才能创建文件
+                return name;
             } catch (IOException e) {
             }
         } else {
@@ -317,14 +350,6 @@ public class MyUtils {
         return stringBuffer.insert(positoin, des).toString();
 
     }
-
-
-
-
-
-
-
-
 
 
 }

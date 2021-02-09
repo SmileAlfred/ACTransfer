@@ -1,10 +1,14 @@
 package com.example.a2atranfer.client;
 
+import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
 
+import com.example.a2atranfer.R;
 import com.example.a2atranfer.activity.A2ATransferActivity;
 import com.example.a2atranfer.beans.MsgBean;
 import com.example.a2atranfer.utils.Logger;
@@ -20,6 +24,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
+import java.sql.Struct;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.Set;
@@ -45,6 +50,7 @@ public class TCPClient {
     private ThreadPoolExecutor mConnectThreadPool;  // 消息连接和接收的线程池
     private Context mContext;
     private Handler mHandler;
+    private long fileLength = -1L;
 
 
     public TCPClient(Context context, Handler handler, String clientName) {
@@ -170,71 +176,61 @@ public class TCPClient {
         }
     }
 
-    private void handleRead() {
-        if (transfering) return;
-        try {
+    private void handleRead() throws Exception {
+        if (transfering) {
+            Message.obtain(mHandler, A2ATransferActivity.LOG, "终于要写入文件了！").sendToTarget();
+            int bufferSize = (int) MyUtils.bufSize(fileLength);
+            //if (null == byteBufContent || bufferSize != byteBufContent.capacity())
+            byteBufContent = ByteBuffer.allocate(bufferSize);
+
+            FileChannel fileChannel = new FileOutputStream(fileWholeName).getChannel();
+
+            int writed = 0;
+            int len = -1;
+
+            //将客户端写入通道的数据读取并存储到buffer中
+            while (writed < fileLength) {
+                //while ((len = client.read(byteBufContent)) > 0) {
+                len = mSocketChannel.read(byteBufContent);
+                //这里睡 10ms 很关键！这里是多线程的问题；TODO:多线程解决这个愚蠢的解决方式……
+                if (len <= 0) {
+                    Thread.sleep(5);
+                    continue;
+                }
+
+                writed += len;
+                //System.out.println(writed + " / "+fileLength + " B");
+                byteBufContent.flip();//将缓冲区翻转为读模式
+
+                fileChannel.write(byteBufContent);
+                Message.obtain(mHandler, A2ATransferActivity.PROGRESS, writed + "/" + fileLength).sendToTarget();
+
+
+                byteBufContent.clear();//清除本次缓存区内容
+            }
+            Message.obtain(mHandler, A2ATransferActivity.TRANSfERMSG, "文件接收完成；保存在：" + fileWholeName + "; " + fileChannel.size()).sendToTarget();
+
+            fileChannel.close();
+            transfering = false;
+            fileLength = -1L;
+            fileWholeName = "";
+        } else {
             //读取服务器发送来的数据到缓冲区中
             byteBufMsg = ByteBuffer.allocate(64);
             int bytesRead = mSocketChannel.read(byteBufMsg);
+            byteBufMsg.flip();
 
             //发送来的消息 非空，那么读取
             if (bytesRead > 0) {
                 //对消息进行处理，若发来的是文件，那么返回文件大小（byte）
-                long fileLength = handleReceivedMsg(byteBufMsg.array());
+                fileLength = handleReceivedMsg(byteBufMsg.array());
                 //如果文件大小 > 0 ,那么就是开辟一个新的缓存区，对文件进行接收
-                if (fileLength > 0) {
-                    Message.obtain(mHandler, A2ATransferActivity.LOG, "终于要写入文件了！").sendToTarget();
+                if (fileLength > 0) transfering = true;
 
-                    transfering = true;
-                    int bufferSize = (int) MyUtils.bufSize(fileLength);
-                    if (null == byteBufContent || bufferSize != byteBufContent.capacity())
-                        byteBufContent = ByteBuffer.allocate(bufferSize);
-
-                    FileChannel fileChannel = new FileOutputStream(fileWholeName).getChannel();
-
-                    int writed = 0;
-                    int len = -1;
-                    //将客户端写入通道的数据读取并存储到buffer中
-                    while (writed < fileLength) {
-                        //while ((len = client.read(byteBufContent)) > 0) {
-                        len = mSocketChannel.read(byteBufContent);
-                        //这里睡 10ms 很关键！这里是多线程的问题；TODO:多线程解决这个愚蠢的解决方式……
-                        if (len <= 0) {
-                            Thread.sleep(5);
-                            continue;
-                        }
-
-                        writed += len;
-                        //System.out.println(writed + " / "+fileLength + " B");
-                        byteBufContent.flip();//将缓冲区翻转为读模式
-
-                        fileChannel.write(byteBufContent);
-                        Message.obtain(mHandler, A2ATransferActivity.TRANSfERMSG, "接收文件：" + writed + " / " + fileLength + " B").sendToTarget();
-
-
-                        byteBufContent.clear();//清除本次缓存区内容
-
-                    }
-                    System.out.println(MyUtils.timeFormat.format(new Date()) + ":文件接收完成");
-
-                    fileChannel.close();
-                    transfering = false;
-                }
-
-                MsgBean msgBeanReceived = MsgBean.getStruct(byteBufMsg.array());
-                switch (msgBeanReceived.msg_code) {
-
-
-                }
                 byteBufMsg.clear();
             } else {
                 //disconnectTcp();
             }
-        } catch (Exception e) {
-            Message mMessage = new Message();
-            mMessage.obj = "handleRead 报错：" + e.getMessage();
-            mMessage.what = A2ATransferActivity.LOG;
-            mHandler.sendMessage(mMessage);
         }
     }
 
@@ -246,30 +242,21 @@ public class TCPClient {
      * @throws Exception
      */
     private long handleReceivedMsg(byte[] array) throws Exception {
-        MsgBean msgBeanReceived = MsgBean.getStruct(array);
+        final MsgBean msgBeanReceived = MsgBean.getStruct(array);
         Message.obtain(mHandler, A2ATransferActivity.TRANSfERMSG, "接收到命令：" + msgBeanReceived).sendToTarget();
 
-        MsgBean msgBean4Send;
+        final MsgBean msgBean4Send = new MsgBean();
         Logger.i(TAG, "客户端收到MSG：" + msgBeanReceived);
         long fileLength = -1L;
         int msg_code = msgBeanReceived.getMsg_code();
-        String name;
+        final String name;
         switch (msg_code) {
             case MsgBean.ORDER_REQUEST_IS_RECEIVE://请求是否接收文件？
                 name = msgBeanReceived.getFileName();
-                Message.obtain(mHandler, A2ATransferActivity.TRANSfERMSG, "服务器正发送文件：" + name).sendToTarget();
-
-                //Test System.out.print("是否接收文件 " + name + "？(Y/N) ");
-
                 fileWholeName = MyUtils.createFile(name);
                 fileLength = msgBeanReceived.getFileLength();
-                Message.obtain(mHandler, A2ATransferActivity.TRANSfERMSG, "我同意接收文件：" + name + " ;文件大小为：" + fileLength + " B").sendToTarget();
-
-                //Thread.sleep(1000);
-                //TODO:判断是否接收
-                //msgBean4Send = new MsgBean(MsgBean.ORDER_ALLOW_SEND, "允许服务器发送", 0);
-                //sendMsg(msgBean4Send);
-
+                Message.obtain(mHandler, A2ATransferActivity.TRANSfERMSG, "服务器正发送文件：" + name + " ; 文件大小：" + fileLength + " B").sendToTarget();
+                Message.obtain(mHandler, A2ATransferActivity.ISRECEIVE, name).sendToTarget();
 
                 //Test          break;
                 //Test      case "N":
@@ -322,9 +309,9 @@ public class TCPClient {
         sendBuffer.flip();
 
         mSocketChannel.write(sendBuffer);
+        msgBytes = null;
         //不可删除
         mSocketChannel.register(mSelector, SelectionKey.OP_READ);
-        msgBytes = null;
     }
 
     /**

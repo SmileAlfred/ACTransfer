@@ -3,9 +3,11 @@ package com.example.a2atranfer.activity;
 import android.Manifest;
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
@@ -29,6 +31,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -55,6 +58,7 @@ import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
@@ -80,6 +84,8 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
     private Button btnSend, btn_send_content;
     private ImageView iv_test;
     private Handler handler;
+    private AlertDialog.Builder builder;
+    private ProgressBar pb;
 
     //private SocketManager4Java socketManager4Java;
 
@@ -96,7 +102,9 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
             CLIENTGETMSG = 3,
             SERVERGETMSG = 4,
             LOG = 5,
-            SERVER = 6;
+            SERVER = 6,
+            ISRECEIVE = 7,
+            PROGRESS = 8;
 
     public static boolean connectSuccessful = false,
             wifiIsOpen = false;
@@ -162,6 +170,43 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                         break;
                     case SERVER:
                         tv_trans_msg.append("[" + timeFormat.format(new Date()) + "]" + "Server:" + msg.obj.toString() + "\n");
+                        break;
+                    case ISRECEIVE:
+                        //Test System.out.print();
+                        builder = new AlertDialog.Builder(A2ATransferActivity.this);
+                        final String name = msg.obj.toString();
+                        builder.setTitle("是否接收文件<" + msg.obj.toString() + ">？(Y/N) ");
+                        builder.setNegativeButton("接收", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface arg0, int view) {
+                                Message.obtain(handler, A2ATransferActivity.TRANSfERMSG, "我同意接收文件：" + name).sendToTarget();
+                                //TODO:判断是否接收
+                                MsgBean msgBean4Send = new MsgBean(MsgBean.ORDER_ALLOW_SEND, "允许服务器发送", 0);
+                                try {
+                                    mTcpClient.sendMsg(msgBean4Send);
+                                } catch (ClosedChannelException e) {
+                                }
+                                //arg0.dismiss();
+                            }
+                        });
+                        builder.setPositiveButton("拒绝", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface arg0, int view) {
+                                Message.obtain(handler, A2ATransferActivity.TRANSfERMSG, "我拒绝接收文件：" + name).sendToTarget();
+                                //TODO:判断是否接收
+                                MsgBean msgBean4Send = new MsgBean(MsgBean.ORDER_REJECT_SEND, "拒绝服务器发送", 0);
+                                try {
+                                    mTcpClient.sendMsg(msgBean4Send);
+                                } catch (ClosedChannelException e) {
+                                }
+                            }
+                        });
+                        builder.create().show();
+                        break;
+                    case PROGRESS:
+                        String[] str = msg.obj.toString().split("/");
+                        long i = Long.parseLong(str[0]) * 100 / Long.parseLong(str[1]);
+                        pb.setProgress((int)i);
                         break;
                     default:
                         break;
@@ -248,6 +293,7 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
         tv_trans_msg = findViewById(R.id.tv_trans_msg);
         iv_test = findViewById(R.id.iv_test);
 
+        pb = findViewById(R.id.pb);
 
         et_content = findViewById(R.id.et_content);
 

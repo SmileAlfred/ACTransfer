@@ -79,7 +79,7 @@ import javax.net.ssl.HandshakeCompletedListener;
  */
 public class A2ATransferActivity extends AppCompatActivity implements View.OnClickListener {
     private static final int FILE_CODE = 0, REQUEST_CODE = 1;
-    private TextView tv_local_ip, tv_log;
+    private TextView tv_local_ip, tv_log, tv_rate;
     private EditText et_target_ip, et_target_port, tv_trans_msg, et_content;
     private Button btnSend, btn_send_content;
     private ImageView iv_test;
@@ -173,9 +173,11 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                         break;
                     case ISRECEIVE:
                         //Test System.out.print();
+                        MyUtils.playSound(A2ATransferActivity.this, 0);
                         builder = new AlertDialog.Builder(A2ATransferActivity.this);
                         final String name = msg.obj.toString();
                         builder.setTitle("是否接收文件<" + msg.obj.toString() + ">？(Y/N) ");
+                        builder.setCancelable(false);
                         builder.setNegativeButton("接收", new DialogInterface.OnClickListener() {
                             @Override
                             public void onClick(DialogInterface arg0, int view) {
@@ -185,6 +187,7 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                                 try {
                                     mTcpClient.sendMsg(msgBean4Send);
                                 } catch (ClosedChannelException e) {
+                                    e.printStackTrace();
                                 }
                                 //arg0.dismiss();
                             }
@@ -207,6 +210,7 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
                         String[] str = msg.obj.toString().split("/");
                         long i = Long.parseLong(str[0]) * 100 / Long.parseLong(str[1]);
                         pb.setProgress((int)i);
+                        tv_rate.setText(""+(int)i);
                         break;
                     default:
                         break;
@@ -287,6 +291,7 @@ public class A2ATransferActivity extends AppCompatActivity implements View.OnCli
         tv_log = findViewById(R.id.tv_log);
         tv_local_ip = findViewById(R.id.tv_local_ip);
         tv_local_ip.setOnClickListener(this);
+        tv_rate = findViewById(R.id.tv_rate);
 
         et_target_ip = findViewById(R.id.et_target_ip);
         et_target_port = findViewById(R.id.et_target_port);

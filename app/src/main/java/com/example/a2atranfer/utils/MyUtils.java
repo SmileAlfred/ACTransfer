@@ -78,9 +78,9 @@ public class MyUtils {
         long KB = (size / 1024);            //3,601
         long MB = KB / 1024;                //3.516
         long GB = MB / 1024;                //0
-        if (GB > 0) return 1024 * 1024 * 1024;// ?GB
-        if (MB > 0) return 1024 * 1024;// ?MB
-        if (KB > 0) return 1024;
+        if (GB > 0) return 1024 * 1024 * 1024;// 1GB
+        if (MB > 0) return 1024 * 1024*16;// ?MB
+        if (KB > 0) return 1024*16;
         if (KB == 0) return (int) size;
         return 1024 * 1024;
     }

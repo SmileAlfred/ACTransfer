@@ -34,6 +34,10 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 出现的问题！
+ * buf.get 方法 ！注意方法中各参数的意义！
+ */
 public class TCPClient {
     private static final String TAG = TCPClient.class.getSimpleName();
 
@@ -179,18 +183,17 @@ public class TCPClient {
     private void handleRead() throws Exception {
         if (transfering) {
             Message.obtain(mHandler, A2ATransferActivity.LOG, "终于要写入文件了！").sendToTarget();
-            int bufferSize = (int) MyUtils.bufSize(fileLength);
+            int bufferSize = MyUtils.bufSize(fileLength);
             //if (null == byteBufContent || bufferSize != byteBufContent.capacity())
             byteBufContent = ByteBuffer.allocate(bufferSize);
 
             FileChannel fileChannel = new FileOutputStream(fileWholeName).getChannel();
 
-            int writed = 0;
+            long writed = 0;
             int len = -1;
 
             //将客户端写入通道的数据读取并存储到buffer中
             while (writed < fileLength) {
-                //while ((len = client.read(byteBufContent)) > 0) {
                 len = mSocketChannel.read(byteBufContent);
                 //这里睡 10ms 很关键！这里是多线程的问题；TODO:多线程解决这个愚蠢的解决方式……
                 if (len <= 0) {
@@ -199,21 +202,45 @@ public class TCPClient {
                 }
 
                 writed += len;
-                //System.out.println(writed + " / "+fileLength + " B");
                 byteBufContent.flip();//将缓冲区翻转为读模式
+                //连续发送的消息，可能导致 多读取！
+                if (writed > fileLength) {
+                    //byteBufContent.limit() - writed + fileLength 表示，最后一次的 缓冲区中，有效文件的大小，
+                    // 不能通过取模法【fileLength % bufSize】的方法，因为缓冲区很可能并不会每次都读满！
+                    ByteBuffer byteBufLast = ByteBuffer.allocate(byteBufContent.limit());
+                    byteBufContent.get(byteBufLast.array(), 0, byteBufContent.limit() - (int) (writed - fileLength));
+                    fileChannel.write(byteBufLast);
+                } else {
+                    fileChannel.write(byteBufContent);
+                }
 
-                fileChannel.write(byteBufContent);
                 Message.obtain(mHandler, A2ATransferActivity.PROGRESS, writed + "/" + fileLength).sendToTarget();
-
+                //TODO:如果发送完成，那么接受下一段消息
+                if (writed > fileLength) {
+                    byte[] newMsg = new byte[byteBufContent.limit() - byteBufContent.position()];
+                    try {
+                        byteBufContent.get(newMsg, 0, (byteBufContent.limit() - byteBufContent.position()));
+                        writed = 0;//重新进入循环！
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    fileLength = handleReceivedMsg(newMsg);
+                    //如果文件大小 > 0 ,那么就是开辟一个新的缓存区，对文件进行接收
+                    if (fileLength > 0) {
+                        transfering = true;
+                    }
+                }
 
                 byteBufContent.clear();//清除本次缓存区内容
             }
             Message.obtain(mHandler, A2ATransferActivity.TRANSfERMSG, "文件接收完成；保存在：" + fileWholeName + "; " + fileChannel.size()).sendToTarget();
 
-            fileChannel.close();
-            transfering = false;
-            fileLength = -1L;
-            fileWholeName = "";
+            if (writed == fileLength) {
+                fileChannel.close();
+                transfering = false;
+                fileLength = -1L;
+                fileWholeName = "";
+            }
         } else {
             //读取服务器发送来的数据到缓冲区中
             byteBufMsg = ByteBuffer.allocate(64);
